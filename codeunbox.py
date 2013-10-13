@@ -39,7 +39,7 @@ class Base:
         asset = self.assets[assetkey]
         data[key]['data'] = "Note: %s\nPath: %s\n--\n\n%s" % (asset['note'].decode("utf-8", "replace"), asset['path'].decode("utf-8", "replace"), asset['content'].decode("utf-8", "replace"))
         if not data[key].has_key('syntax') and asset['syntax'] is not None:
-          data[key]['syntax'] = snippet['syntax']
+          data[key]['syntax'] = asset['syntax']
       for tagkey in snippet['rel_t']:
         tag = self.tags[tagkey]
         data[key]['tags'] = tag['title']
@@ -47,6 +47,9 @@ class Base:
       if not data[key].has_key('syntax'):
         data[key]['syntax'] = 'Standard'
 
+    # iterx = data.itervalues()
+    # print iterx.next()
+   
   #-----------------------------------------------------------------------------
 
   def extToSyntax(self, ext):
@@ -55,11 +58,17 @@ class Base:
       syntax = 'C'
     elif ext == 'cc':
       syntax = 'C++'
+    elif ext == 'html':
+      syntax = 'HTML'
+    elif ext == 'java':
+      syntax = 'Java'
     elif ext == 'm':
       syntax = 'Objective-C'
     elif ext == 'py':
       syntax = 'Python'
-    elif ext == 'txt':
+    elif ext == 'py':
+      syntax = 'Ruby'
+    elif ext == 'rb':
       syntax = 'Standard'
     elif ext == 'sh':
       syntax = 'Shell'
@@ -99,6 +108,7 @@ class Base:
         if bname == 'path':
           xpath = attrib.childNodes[0].nodeValue
           ext = os.path.splitext(xpath)
+          ext = ext[-1][1:]
           xsyntax = self.extToSyntax(ext)
         if bname == 'name':
           xname = attrib.childNodes[0].nodeValue
