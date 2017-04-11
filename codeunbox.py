@@ -7,6 +7,7 @@
 
 import sys
 import os
+import sqlite3
 
 def LogConsole(arg):
   print("%s\n" % arg)
@@ -58,10 +59,16 @@ class Base:
       syntax = 'C'
     elif ext == 'cc':
       syntax = 'C++'
+    elif ext == 'config':
+      syntax = 'Apache'
     elif ext == 'html':
       syntax = 'HTML'
     elif ext == 'java':
       syntax = 'Java'
+    elif ext == 'json':
+      syntax = 'JavaScript'
+    elif ext == 'js':
+      syntax = 'JavaScript'
     elif ext == 'm':
       syntax = 'Objective-C'
     elif ext == 'py':
@@ -70,10 +77,14 @@ class Base:
       syntax = 'Ruby'
     elif ext == 'rb':
       syntax = 'Standard'
+    elif ext == 'sql':
+      syntax = 'SQL'
     elif ext == 'sh':
       syntax = 'Shell'
     elif ext == 'scpt':
       syntax = 'Applescript'
+    elif ext == 'txt':
+      syntax = 'Shell'
 
     return syntax
 
@@ -159,6 +170,59 @@ class Base:
 
     return 0
 
+  def doDashDB(self, path):
+    conn = sqlite3.connect(os.path.expanduser(path))
+    c = conn.cursor()
+
+    # Create table
+    c.execute('''
+      CREATE TABLE snippets
+      (
+        sid INTEGER PRIMARY KEY,
+        title TEXT,
+        body TEXT,
+        syntax TEXT,
+        usageCount INTEGER,
+        FOREIGN KEY (sid) REFERENCES tagsIndex (sid) ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED
+      )
+      ''')
+
+    c.execute('''
+        CREATE TABLE tags
+        (
+            tid INTEGER PRIMARY KEY,
+            tag TEXT UNIQUE,
+            FOREIGN KEY (tid) REFERENCES tagsIndex (tid) ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED
+        );
+      ''')
+
+    # c.execute('''
+    #     CREATE UNIQUE INDEX sqlite_autoindex_tags_1 ON tags (tag)
+    #   ''')
+
+    c.execute('''
+        CREATE TABLE tagsIndex
+        (
+            tid INTEGER,
+            sid INTEGER
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE smartTags
+        (
+            stid INTEGER PRIMARY KEY,
+            name TEXT,
+            query TEXT
+        )
+    ''')
+    conn.commit()
+    for tag in self.tags:
+      print tag
+      c.execute("INSERT INTO tags (tag) VALUES ('%s')", tag)
+        
+    conn.commit()
+    conn.close()
   #-----------------------------------------------------------------------------
 
   def __init__(self, arg):
@@ -175,5 +239,6 @@ if __name__ == "__main__":
   base = Base(0)
   base.doImport("~/Dropbox/CodeBox.cbxml")
   base.doDashExport()
+  base.doDashDB("~/Dropbox/snippetsExport.dash")
 
 #===============================================================================
