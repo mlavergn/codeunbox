@@ -5,8 +5,10 @@
 # __copyright__ = "Copyright 2013, Marc Lavergne"
 # __license__ = "Modified BSD (http://directory.fsf.org/wiki/License:BSD_3Clause)"
 
+from __future__ import print_function
 import sys
 import os
+import sqlite3
 
 def LogConsole(arg):
   print("%s\n" % arg)
@@ -24,17 +26,18 @@ class Base:
     try:
       return base64.decodestring(data)
     except:
-      print sys.exc_info()[0]
+      print(sys.exc_info()[0])
       return None
 
   #-----------------------------------------------------------------------------
 
-  def doDashExport(self):
+  def doDashExport(self, path):
     data = {}
     for key in self.snippets:
       snippet = self.snippets[key]
       data[key] = {}
       data[key]['title'] = snippet['title']
+      data[key]['tags'] = []
       for assetkey in snippet['rel_a']:
         asset = self.assets[assetkey]
         data[key]['data'] = "Note: %s\nPath: %s\n--\n\n%s" % (asset['note'].decode("utf-8", "replace"), asset['path'].decode("utf-8", "replace"), asset['content'].decode("utf-8", "replace"))
@@ -42,14 +45,27 @@ class Base:
           data[key]['syntax'] = asset['syntax']
       for tagkey in snippet['rel_t']:
         tag = self.tags[tagkey]
-        data[key]['tags'] = tag['title']
-
+        data[key]['tags'].append(tag['title'])
       if not data[key].has_key('syntax'):
         data[key]['syntax'] = 'Standard'
 
-    # iterx = data.itervalues()
-    # print iterx.next()
-   
+    conn = sqlite3.connect(os.path.expanduser(path))
+    c = conn.cursor()
+
+    for key, value in data.iteritems():
+      print('Inserting snippet "{}" with syntax "{}"'.format(value['title'], value['syntax']))
+      c.execute('INSERT INTO snippets (title, body, syntax) VALUES (?,?,?)', (value['title'], value['data'], value['syntax'], ))
+      snippetId = c.lastrowid
+      for tag in value['tags']:
+        c.execute('INSERT OR IGNORE INTO tags (tag) VALUES (?)', (tag,))
+        c.execute('Select tid FROM tags WHERE TAG = ?', (tag,))
+        tagId = c.fetchone()[0]
+        print('Adding tag "{}" to "{}"'.format(tag, value['title']))
+        c.execute('INSERT into tagsIndex (tid, sid) VALUES (?,?)', (tagId, snippetId))
+
+    conn.commit()
+    conn.close()
+
   #-----------------------------------------------------------------------------
 
   def extToSyntax(self, ext):
@@ -58,10 +74,16 @@ class Base:
       syntax = 'C'
     elif ext == 'cc':
       syntax = 'C++'
+    elif ext == 'config':
+      syntax = 'Apache'
     elif ext == 'html':
       syntax = 'HTML'
     elif ext == 'java':
       syntax = 'Java'
+    elif ext == 'json':
+      syntax = 'JavaScript'
+    elif ext == 'js':
+      syntax = 'JavaScript'
     elif ext == 'm':
       syntax = 'Objective-C'
     elif ext == 'py':
@@ -70,10 +92,14 @@ class Base:
       syntax = 'Ruby'
     elif ext == 'rb':
       syntax = 'Standard'
+    elif ext == 'sql':
+      syntax = 'SQL'
     elif ext == 'sh':
       syntax = 'Shell'
     elif ext == 'scpt':
       syntax = 'Applescript'
+    elif ext == 'txt':
+      syntax = 'Shell'
 
     return syntax
 
@@ -133,7 +159,7 @@ class Base:
       if xtype == 'SNIPPET':
         if not self.snippets.has_key(xid):
           self.snippets[xid] = {}
-        self.snippets[xid]['title'] = "-%s" % xname
+        self.snippets[xid]['title'] = "%s" % xname
         self.snippets[xid]['rel_a'] = xrel_a.split()
         self.snippets[xid]['rel_t'] = xrel_t.split()
       elif xtype == 'ASSET':
@@ -153,12 +179,61 @@ class Base:
         self.tags[xid]['rel_a'] = xrel_a.split()
 
     # stats
-    print "snippets [%i]" % len(self.snippets)
-    print "assets   [%i]" % len(self.assets)
-    print "tags     [%i]" % len(self.tags)
+    print("snippets [%i]" % len(self.snippets))
+    print("assets   [%i]" % len(self.assets))
+    print("tags     [%i]" % len(self.tags))
 
     return 0
 
+  def doCreateDashDB(self, path):
+    conn = sqlite3.connect(os.path.expanduser(path))
+    c = conn.cursor()
+
+    # Create table
+    c.execute('''
+      CREATE TABLE IF NOT EXISTS snippets
+      (
+        sid INTEGER PRIMARY KEY,
+        title TEXT,
+        body TEXT,
+        syntax TEXT,
+        usageCount INTEGER,
+        FOREIGN KEY (sid) REFERENCES tagsIndex (sid) ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED
+      )
+      ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS tags
+        (
+            tid INTEGER PRIMARY KEY,
+            tag TEXT UNIQUE,
+            FOREIGN KEY (tid) REFERENCES tagsIndex (tid) ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED
+        );
+      ''')
+
+    # c.execute('''
+    #     CREATE UNIQUE INDEX sqlite_autoindex_tags_1 ON tags (tag)
+    #   ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS tagsIndex
+        (
+            tid INTEGER,
+            sid INTEGER
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS smartTags
+        (
+            stid INTEGER PRIMARY KEY,
+            name TEXT,
+            query TEXT
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
   #-----------------------------------------------------------------------------
 
   def __init__(self, arg):
@@ -167,13 +242,16 @@ class Base:
       self.assets = {}
       self.tags = {}
     except:
-      print sys.exc_info()[0]
+      print(sys.exc_info()[0])
+
 
 #===============================================================================
 
 if __name__ == "__main__":
   base = Base(0)
   base.doImport("~/Dropbox/CodeBox.cbxml")
-  base.doDashExport()
+  base.doCreateDashDB("~/Dropbox/snippetsExport.dash")
+  base.doDashExport("~/Dropbox/snippetsExport.dash")
+
 
 #===============================================================================
